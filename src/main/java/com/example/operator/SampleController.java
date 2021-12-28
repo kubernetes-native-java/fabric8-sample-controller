@@ -35,8 +35,9 @@ class SampleController {
 
 	private final MixedOperation<Foo, FooList, Resource<Foo>> fooClient;
 
-
-	public SampleController(KubernetesClient kubernetesClient, MixedOperation<Foo, FooList, Resource<Foo>> fooClient, SharedIndexInformer<Deployment> deploymentInformer, SharedIndexInformer<Foo> fooInformer, String namespace) {
+	public SampleController(KubernetesClient kubernetesClient, MixedOperation<Foo, FooList, Resource<Foo>> fooClient,
+			SharedIndexInformer<Deployment> deploymentInformer, SharedIndexInformer<Foo> fooInformer,
+			String namespace) {
 		this.kubernetesClient = kubernetesClient;
 		this.fooClient = fooClient;
 		this.fooLister = new Lister<>(fooInformer.getIndexer(), namespace);
@@ -79,8 +80,10 @@ class SampleController {
 			@Override
 			public void onUpdate(Deployment oldDeployment, Deployment newDeployment) {
 				// Periodic resync will send update events for all known Deployments.
-				// Two different versions of the same Deployment will always have different RVs.
-				if (oldDeployment.getMetadata().getResourceVersion().equals(newDeployment.getMetadata().getResourceVersion())) {
+				// Two different versions of the same Deployment will always have
+				// different RVs.
+				if (oldDeployment.getMetadata().getResourceVersion()
+						.equals(newDeployment.getMetadata().getResourceVersion())) {
 					return;
 				}
 				handleObject(newDeployment);
@@ -98,6 +101,7 @@ class SampleController {
 		log.info("Waiting for informer caches to sync");
 		while (!deploymentInformer.hasSynced() || !fooInformer.hasSynced()) {
 			// Wait till Informer syncs
+			// log.info("waiting for the informers to sync...");
 		}
 
 		while (!Thread.currentThread().isInterrupted()) {
@@ -115,13 +119,20 @@ class SampleController {
 
 				// Get the Foo resource's name from key which is in format namespace/name
 				String name = key.split("/")[1];
-				Foo foo = fooLister.get(key.split("/")[1]);
-				if (foo == null) {
-					log.error("Foo {} in workqueue no longer exists", name);
-					return;
+				log.info("trying to get the Foo with the name " + name);
+				try {
+					Foo foo = fooLister.get(name);
+					log.info("got the Foo with the name " + name);
+					if (foo == null) {
+						log.error("Foo {} in workqueue no longer exists", name);
+						return;
+					}
+					log.info("going to try to reconcile (" + name + ")");
+					reconcile(foo);
 				}
-				reconcile(foo);
-
+				catch (Exception ex) {
+					log.error("got an exception", ex);
+				}
 			}
 			catch (InterruptedException interruptedException) {
 				Thread.currentThread().interrupt();
@@ -131,25 +142,42 @@ class SampleController {
 	}
 
 	/**
-		* Compares the actual state with the desired, and attempts to
-		* converge the two. It then updates the Status block of the Foo resource
-		* with the current status of the resource.
-		*
-		* @param foo specified resource
-		*/
+	 * Compares the actual state with the desired, and attempts to converge the two. It
+	 * then updates the Status block of the Foo resource with the current status of the
+	 * resource.
+	 * @param foo specified resource
+	 */
 	protected void reconcile(Foo foo) {
+		log.info("trying to reconcile " + foo);
 		String deploymentName = foo.getSpec().getDeploymentName();
 		if (deploymentName == null || deploymentName.isEmpty()) {
 			// We choose to absorb the error here as the worker would requeue the
 			// resource otherwise. Instead, the next time the resource is updated
 			// the resource will be queued again.
-			log.warn("No Deployment name specified for Foo {}/{}", foo.getMetadata().getNamespace(), foo.getMetadata().getName());
+			log.warn("No Deployment name specified for Foo {}/{}", foo.getMetadata().getNamespace(),
+					foo.getMetadata().getName());
 			return;
 		}
 
+		log.info("going to call the Kubernetes API and get some deployments");
+		log.info("metadata.namespace.name = " + foo.getMetadata().getNamespace());
+		log.info("going to get a " + Deployment.class.getName() + " with the name " + deploymentName);
 		// Get the deployment with the name specified in Foo.spec
-		Deployment deployment = kubernetesClient.apps().deployments().inNamespace(foo.getMetadata().getNamespace()).withName(deploymentName).get();
-		// If the resource doesn't exist, we'll create it
+		Deployment deployment = null;
+
+		try {
+			deployment = kubernetesClient//
+					.apps()//
+					.deployments()//
+					.inNamespace(foo.getMetadata().getNamespace())//
+					.withName(deploymentName)//
+					.get();
+			log.info("got the deployment? " + (null == deployment ? "no" : "yes"));
+		}
+		catch (Exception ex) {
+			log.error("couldn't get the Deployment ", ex);
+		}
+
 		if (deployment == null) {
 			createDeployments(foo);
 			return;
@@ -158,7 +186,8 @@ class SampleController {
 		// If the Deployment is not controlled by this Foo resource, we should log
 		// a warning to the event recorder and return error msg.
 		if (!isControlledBy(deployment, foo)) {
-			log.warn("Deployment {} is not controlled by Foo {}", deployment.getMetadata().getName(), foo.getMetadata().getName());
+			log.warn("Deployment {} is not controlled by Foo {}", deployment.getMetadata().getName(),
+					foo.getMetadata().getName());
 			return;
 		}
 
@@ -166,13 +195,12 @@ class SampleController {
 		// number does not equal the current desired replicas on the Deployment, we
 		// should update the Deployment resource.
 		if (foo.getSpec().getReplicas() != deployment.getSpec().getReplicas()) {
-			log.info("Foo {} replicas: {}, Deployment {} replicas: {}", foo.getMetadata().getName(), foo.getSpec().getReplicas(),
-				deployment.getMetadata().getName(), deployment.getSpec().getReplicas());
+			log.info("Foo {} replicas: {}, Deployment {} replicas: {}", foo.getMetadata().getName(),
+					foo.getSpec().getReplicas(), deployment.getMetadata().getName(),
+					deployment.getSpec().getReplicas());
 			deployment.getSpec().setReplicas(foo.getSpec().getReplicas());
-			kubernetesClient.apps().deployments()
-				.inNamespace(foo.getMetadata().getNamespace())
-				.withName(deployment.getMetadata().getNamespace())
-				.replace(deployment);
+			kubernetesClient.apps().deployments().inNamespace(foo.getMetadata().getNamespace())
+					.withName(deployment.getMetadata().getNamespace()).replace(deployment);
 		}
 
 		// Finally, we update the status block of the Foo resource to reflect the
@@ -181,8 +209,11 @@ class SampleController {
 	}
 
 	private void createDeployments(Foo foo) {
+		log.info("going to create a Deployment " + foo.toString());
 		Deployment deployment = createNewDeployment(foo);
+		log.info("created the new Deployment using " + deployment.getFullResourceName());
 		kubernetesClient.apps().deployments().inNamespace(foo.getMetadata().getNamespace()).create(deployment);
+		log.info("used the KubernetesClient to create a new Deployment");
 	}
 
 	private void enqueueFoo(Foo foo) {
@@ -198,13 +229,14 @@ class SampleController {
 	private void handleObject(HasMetadata obj) {
 		log.info("handleDeploymentObject({})", obj.getMetadata().getName());
 		OwnerReference ownerReference = getControllerOf(obj);
-		Objects.requireNonNull(ownerReference);
-		if (!ownerReference.getKind().equalsIgnoreCase(Foo.class.getSimpleName())) {
+		// Objects.requireNonNull(ownerReference);
+		if (ownerReference == null || !ownerReference.getKind().equalsIgnoreCase(Foo.class.getSimpleName())) {
 			return;
 		}
 		Foo foo = fooLister.get(ownerReference.getName());
 		if (foo == null) {
-			log.info("ignoring orphaned object '{}' of foo '{}'", obj.getMetadata().getSelfLink(), ownerReference.getName());
+			log.info("ignoring orphaned object '{}' of foo '{}'", obj.getMetadata().getSelfLink(),
+					ownerReference.getName());
 			return;
 		}
 		enqueueFoo(foo);
@@ -218,44 +250,57 @@ class SampleController {
 		Foo fooClone = getFooClone(foo);
 		fooClone.setStatus(fooStatus);
 		// If the CustomResourceSubresources feature gate is not enabled,
-		// we must use Update instead of UpdateStatus to update the Status block of the Foo resource.
+		// we must use Update instead of UpdateStatus to update the Status block of the
+		// Foo resource.
 		// UpdateStatus will not allow changes to the Spec of the resource,
-		// which is ideal for ensuring nothing other than resource status has been updated.
-		fooClient.inNamespace(foo.getMetadata().getNamespace()).withName(foo.getMetadata().getName()).updateStatus(foo);
+		// which is ideal for ensuring nothing other than resource status has been
+		// updated.
+		fooClient.inNamespace(foo.getMetadata().getNamespace()).withName(foo.getMetadata().getName())
+				.replaceStatus(foo);
 	}
 
 	/**
-		* createNewDeployment creates a new Deployment for a Foo resource. It also sets
-		* the appropriate OwnerReferences on the resource so handleObject can discover
-		* the Foo resource that 'owns' it.
-		*
-		* @param foo {@link Foo} resource which will be owner of this Deployment
-		* @return Deployment object based on this Foo resource
-		*/
+	 * createNewDeployment creates a new Deployment for a Foo resource. It also sets the
+	 * appropriate OwnerReferences on the resource so handleObject can discover the Foo
+	 * resource that 'owns' it.
+	 * @param foo {@link Foo} resource which will be owner of this Deployment
+	 * @return Deployment object based on this Foo resource
+	 */
 	private Deployment createNewDeployment(Foo foo) {
+		log.info("creating the new Deployment object using the  " + DeploymentBuilder.class.getName());
+		//@formatter:off
 		return new DeploymentBuilder()
 			.withNewMetadata()
-			.withName(foo.getSpec().getDeploymentName())
-			.withNamespace(foo.getMetadata().getNamespace())
-			.withLabels(getDeploymentLabels(foo))
-			.addNewOwnerReference().withController(true).withKind(foo.getKind()).withApiVersion(foo.getApiVersion()).withName(foo.getMetadata().getName()).withNewUid(foo.getMetadata().getUid()).endOwnerReference()
+				.withName(foo.getSpec().getDeploymentName())
+				.withNamespace(foo.getMetadata().getNamespace())
+				.withLabels(getDeploymentLabels(foo))
+				.addNewOwnerReference()
+					.withController(true)
+					.withKind(foo.getKind())
+					.withApiVersion(foo.getApiVersion())
+					.withName(foo.getMetadata().getName())
+					.withUid(foo.getMetadata().getUid())
+				.endOwnerReference()
 			.endMetadata()
 			.withNewSpec()
-			.withReplicas(foo.getSpec().getReplicas())
-			.withNewSelector()
-			.withMatchLabels(getDeploymentLabels(foo))
-			.endSelector()
+				.withReplicas(foo.getSpec().getReplicas())
+				.withNewSelector()
+					.withMatchLabels(getDeploymentLabels(foo))
+				.endSelector()
 			.withNewTemplate()
-			.withNewMetadata().withLabels(getDeploymentLabels(foo)).endMetadata()
-			.withNewSpec()
-			.addNewContainer()
-			.withName("nginx")
-			.withImage("nginx:latest")
-			.endContainer()
-			.endSpec()
+				.withNewMetadata()
+					.withLabels(getDeploymentLabels(foo))
+				.endMetadata()
+				.withNewSpec()
+					.addNewContainer()
+						.withName("nginx")
+						.withImage("nginx:latest")
+					.endContainer()
+				.endSpec()
 			.endTemplate()
-			.endSpec()
-			.build();
+		.endSpec()
+		.build();
+		//@formatter:on
 	}
 
 	private Map<String, String> getDeploymentLabels(Foo foo) {
@@ -278,7 +323,8 @@ class SampleController {
 	private boolean isControlledBy(HasMetadata obj, Foo foo) {
 		OwnerReference ownerReference = getControllerOf(obj);
 		if (ownerReference != null) {
-			return ownerReference.getKind().equals(foo.getKind()) && ownerReference.getName().equals(foo.getMetadata().getName());
+			return ownerReference.getKind().equals(foo.getKind())
+					&& ownerReference.getName().equals(foo.getMetadata().getName());
 		}
 		return false;
 	}
@@ -294,4 +340,5 @@ class SampleController {
 
 		return cloneFoo;
 	}
+
 }

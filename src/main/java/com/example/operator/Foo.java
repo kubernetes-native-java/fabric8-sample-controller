@@ -10,4 +10,5 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Group("samplecontroller.k8s.io")
 @Plural("foos")
 public class Foo extends CustomResource<FooSpec, FooStatus> implements Namespaced {
+
 }

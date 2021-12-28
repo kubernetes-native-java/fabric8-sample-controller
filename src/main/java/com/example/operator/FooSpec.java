@@ -8,6 +8,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class FooSpec {
+
 	private String deploymentName;
+
 	private int replicas;
+
 }
