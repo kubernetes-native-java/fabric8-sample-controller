@@ -24,6 +24,15 @@ import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+/**
+ * This demonstrates how to build a controller that manages creations and updates to a
+ * CRD, {@link Foo}.
+ *
+ * TODO: figure out what a reasonable behavior for deletions would be.
+ *
+ * @author Rohan Kumar
+ * @author Josh Long
+ */
 @Slf4j
 class FooController implements ApplicationRunner, InitializingBean {
 
@@ -57,10 +66,10 @@ class FooController implements ApplicationRunner, InitializingBean {
 		this.sharedInformerFactory.startAllRegisteredInformers();
 		this.sharedInformerFactory.addSharedInformerEventListener(ex -> log.error("error", ex));
 		while (!this.deploymentInformer.hasSynced() || !this.fooInformer.hasSynced()) {
-			log.info("Waiting for informer caches to sync");
+			log.debug("Waiting for informer caches to sync");
 			Thread.sleep(1000);
 		}
-		log.info("trying to fetch work from the work queue. work queue is empty? {} ", "" + this.queue.isEmpty());
+		log.debug("trying to fetch work from the work queue. work queue is empty? {} ", "" + this.queue.isEmpty());
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				this.processQueue();
@@ -75,19 +84,20 @@ class FooController implements ApplicationRunner, InitializingBean {
 	private void processQueue() throws InterruptedException {
 		var key = (String) this.queue.take();
 		Assert.hasText(key, "key can't be null");
-		log.info("Got " + key);
-		Assert.isTrue(StringUtils.hasText(key) && key.contains("/"), () -> "invalid resource key: " + key);
+		log.debug("Got {}", key);
+		Assert.isTrue(StringUtils.hasText(key) && key.contains("/"),
+				() -> String.format("invalid resource key: %s", key));
 		var name = key.split("/")[1]; // format: namespace/name
 		var foo = fooLister.get(name);
 		Assert.notNull(foo, () -> String.format("Foo %s in work queue no longer exists!", foo));
-		log.info("trying to reconcile " + foo);
+		log.debug("trying to reconcile {}", foo);
 		// Get the deployment with the name specified in Foo.spec
 		var deploymentName = foo.getSpec().getDeploymentName();
 		if (!StringUtils.hasText(deploymentName)) {
 			log.warn("No Deployment name specified for Foo {}/{}", foo.getMetadata().getNamespace(),
 					foo.getMetadata().getName());
 		}
-		log.info("trying to get the Deployment...");
+		log.debug("trying to get the Deployment...");
 		var deployment = (Deployment) null;
 		try {
 			deployment = this.kubernetesClient//
@@ -98,16 +108,16 @@ class FooController implements ApplicationRunner, InitializingBean {
 					.get();
 		}
 		catch (Throwable e) {
-			log.info("couldn't find a deployment with the deploymentName " + deploymentName);
+			log.warn("couldn't find a deployment with the deploymentName {}", deploymentName);
 		}
 
 		if (deployment == null) {
-			log.info("going to create a Deployment " + foo);
+			log.debug("going to create a Deployment " + foo);
 			var newDeployment = createNewDeployment(foo);
-			log.info("created the new Deployment using " + newDeployment.getFullResourceName());
+			log.debug("created the new Deployment using " + newDeployment.getFullResourceName());
 			this.kubernetesClient.apps().deployments().inNamespace(foo.getMetadata().getNamespace())
 					.create(newDeployment);
-			log.info("used the KubernetesClient to create a new Deployment");
+			log.debug("used the KubernetesClient to create a new Deployment");
 			return;
 		}
 
@@ -119,7 +129,7 @@ class FooController implements ApplicationRunner, InitializingBean {
 
 		// make sure deployment has same # of replicas as Foo's spec has
 		if (foo.getSpec().getReplicas() != deployment.getSpec().getReplicas()) {
-			log.info("updating the replica count for the deployment with name " + deployment.getFullResourceName());
+			log.debug("updating the replica count for the deployment with name {}", deployment.getFullResourceName());
 			deployment.getSpec().setReplicas(foo.getSpec().getReplicas());
 			this.kubernetesClient //
 					.apps() //
@@ -142,13 +152,13 @@ class FooController implements ApplicationRunner, InitializingBean {
 		cloneFoo.setStatus(fooStatus);
 		this.fooClient.inNamespace(foo.getMetadata().getNamespace()).withName(foo.getMetadata().getName())
 				.replaceStatus(foo);
-		log.info("replaced the status for " + foo);
+		log.debug("replaced the status for {} ", foo);
 	}
 
 	private void enqueueFoo(Foo foo) {
 		var key = Cache.metaNamespaceKeyFunc(foo);
 		if (StringUtils.hasText(key)) {
-			log.info("enqueuing Foo with key {}", key);
+			log.debug("enqueuing Foo with key {}", key);
 			this.queue.add(key);
 		}
 	}
@@ -158,23 +168,23 @@ class FooController implements ApplicationRunner, InitializingBean {
 				.ifPresent(or -> {
 					if (!or.getKind().equalsIgnoreCase(Foo.class.getSimpleName()))
 						return;
-					log.info("handleDeploymentObject({})", deployment.getMetadata().getName());
+					log.debug("handleDeploymentObject({})", deployment.getMetadata().getName());
 					Optional //
 							.ofNullable(fooLister.get(or.getName())) //
-							.ifPresentOrElse(this::enqueueFoo,
-									() -> log.info("couldn't find the foo for {}", deployment.getMetadata().getName()));//
+							.ifPresentOrElse(this::enqueueFoo, () -> log.debug("couldn't find the foo for {}",
+									deployment.getMetadata().getName()));//
 				});
 	}
 
 	/**
-	 * createNewDeployment creates a new Deployment for a Foo resource. It also sets the
-	 * appropriate OwnerReferences on the resource so handleObject can discover the Foo
-	 * resource that 'owns' it.
+	 * {@link this#createNewDeployment(Foo)} creates a new {@link Deployment} for a
+	 * {@link Foo} resource. It also sets the appropriate {@link OwnerReference} on the
+	 * resource so handleObject can discover the Foo resource that 'owns' it.
 	 * @param foo {@link Foo} resource which will be owner of this Deployment
 	 * @return Deployment object based on this Foo resource
 	 */
 	private Deployment createNewDeployment(Foo foo) {
-		log.info("creating the new Deployment object using the  " + DeploymentBuilder.class.getName());
+		log.debug("creating the new Deployment object using the  " + DeploymentBuilder.class.getName());
 		//@formatter:off
 		return new DeploymentBuilder()
 			.withNewMetadata()
@@ -234,13 +244,13 @@ class FooController implements ApplicationRunner, InitializingBean {
 		fooInformer.addEventHandler(new ResourceEventHandler<Foo>() {
 			@Override
 			public void onAdd(Foo foo) {
-				log.info("onAdd(Foo)");
+				log.debug("onAdd(Foo)");
 				enqueueFoo(foo);
 			}
 
 			@Override
 			public void onUpdate(Foo foo, Foo newFoo) {
-				log.info("onUpdate(Foo)");
+				log.debug("onUpdate(Foo)");
 				enqueueFoo(newFoo);
 			}
 
@@ -263,7 +273,7 @@ class FooController implements ApplicationRunner, InitializingBean {
 
 			@Override
 			public void onUpdate(Deployment oldDeployment, Deployment newDeployment) {
-				// Periodic resync will send update events for all known Deployments.
+				// Periodic resyncd will send update events for all known Deployments.
 				// Two different versions of the same Deployment will always have
 				// different RVs.
 				if (oldDeployment.getMetadata().getResourceVersion()

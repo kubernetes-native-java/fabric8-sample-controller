@@ -20,9 +20,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * This example was lifted
+ * This example was lifted and adapted
  * <a href="https://itnext.io/writing-kubernetes-sample-controller-in-java-c8edc38f348f">
- * from the following blog</a>. Thank you, Rohan Kumar.
+ * from this blog</a>. Thank you, Rohan Kumar, for this excellent example. It has been
+ * changed to use Spring Boot and to work with Spring Native.
  *
  * @author Rohan Kumar
  * @author Josh Long
