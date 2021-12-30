@@ -48,9 +48,9 @@ Specifically, a Kubernetes controller is what [the documentation](https://github
 
 Here are some simple examples.
 
-## Working with Fabric8
+## Working with Fabric8 and Spring Native 
 
-Fabric8 is the RedHat-sponsored Java client for Kubernetes. As far as I know, it is older than the official Java client. It works well,  and some Spring modules, such as Spring Cloud Data Flow for Kubernetes and  Spring Cloud Deployer, use the Fabric8 client. And many others besides. It's awesome. Thank you, Red Hat. There are a lot of really cool samples out there that demonstrate how to get something interesting working. I found [this example](https://github.com/rohanKanojia/sample-controller-java) by Rohan Kanojia that shows building a simple Operator to manage custom resources (of type `Foo`) that the example defines in a custom resource definition (CRD). Each time the user deploys a new `Foo`, the operator creates a new `Foo` instance. Trivial, but it does work. I adapted it to use Spring Boot and its lifecycle management. Then I integrated it with the [Fabric8 Spring Native](https://twitter.com/) integration that I wrote to make compilation into a native image easier.
+[Fabric8](https://fabric8.io/) is the RedHat-sponsored Java client for Kubernetes. As far as I know, it is older than the official Java client. It works well,  and some Spring modules, such as Spring Cloud Data Flow for Kubernetes and  Spring Cloud Deployer, use the Fabric8 client. And many others besides. It's awesome. Thank you, Red Hat. There are a lot of really cool samples out there that demonstrate how to get something interesting working. I found [this example](https://github.com/rohanKanojia/sample-controller-java) by Rohan Kanojia that shows building a simple Operator to manage custom resources (of type `Foo`) that the example defines in a custom resource definition (CRD). Each time the user deploys a new `Foo`, the operator creates a new `Foo` instance. Trivial, but it does work. I adapted it to use Spring Boot and its lifecycle management. Then I integrated it with the [Fabric8 Spring Native](https://twitter.com/) integration that I wrote to make compilation into a native image easier.
 
 If you want to see it in action, follow these steps:
 
