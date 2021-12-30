@@ -13,10 +13,9 @@ import io.fabric8.kubernetes.model.annotation.Version;
 public class Foo extends CustomResource<FooSpec, FooStatus> implements Namespaced {
 
 	public Foo(FooSpec spec, ObjectMeta objectMeta, FooStatus status) {
-		var cloneFoo = this;
-		cloneFoo.setSpec(spec);
-		cloneFoo.setMetadata(objectMeta);
-		cloneFoo.setStatus(status);
+		this.setSpec(spec);
+		this.setMetadata(objectMeta);
+		this.setStatus(status);
 	}
 
 	public Foo() {
