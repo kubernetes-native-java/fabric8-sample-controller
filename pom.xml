@@ -20,11 +20,7 @@
             <artifactId>hints</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
-        <dependency>
-            <groupId>io.kubernetesnativejava</groupId>
-            <artifactId>fabric8-spring-native</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
