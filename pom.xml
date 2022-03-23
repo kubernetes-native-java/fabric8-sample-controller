@@ -18,9 +18,8 @@
         <dependency>
             <groupId>com.joshlong</groupId>
             <artifactId>hints</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>0.0.1</version>
         </dependency>
-
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
